@@ -10,8 +10,7 @@
  *   All writes now go through safeSetItem() — QuotaExceededError is caught,
  *   reported to storageMonitor, and never silently swallowed.
  *
- * FREE TIER SAFETY:
- *   Max 20 queued items (prevents runaway storage). Old items are evicted first.
+ * Submitted inspections are never evicted or discarded automatically.
  */
 
 import { supabase } from './supabase';
@@ -20,8 +19,6 @@ import { useStorageMonitor } from './storageMonitor';
 import type { RecordRow } from './sync';
 
 const QUEUE_KEY    = 'dc_submission_queue_v1';
-const MAX_QUEUE    = 20;
-const MAX_ATTEMPTS = 5;
 
 interface QueuedRecord {
   record:    RecordRow;
@@ -46,13 +43,7 @@ function writeQueue(items: QueuedRecord[]): void {
   if (!result.success) {
     useStorageMonitor.getState().handleWriteResult(result);
 
-    if (result.error === 'quota_exceeded') {
-      const trimmed = items.slice(-Math.floor(MAX_QUEUE / 2));
-      const retryResult = safeSetItem(QUEUE_KEY, JSON.stringify(trimmed));
-      if (!retryResult.success) {
-        console.error('[queue] Cannot write trimmed queue — storage critically full.');
-      }
-    }
+    throw new Error(result.message ?? 'Unable to persist offline queue; existing queued records were preserved.');
   }
 }
 
@@ -79,11 +70,8 @@ export function addToQueue(record: RecordRow): void {
 
   const filtered = queue.filter((q) => q.record.id !== record.id);
   filtered.push({ record, queuedAt: new Date().toISOString(), attempts: 0 });
-  const trimmed = filtered.length > MAX_QUEUE
-    ? filtered.slice(filtered.length - MAX_QUEUE)
-    : filtered;
-  writeQueue(trimmed);
-  console.debug('[queue] queued record:', record.ref_id, '| queue size:', trimmed.length);
+  writeQueue(filtered);
+  console.debug('[queue] queued record:', record.ref_id, '| queue size:', filtered.length);
 }
 
 export function removeFromQueue(id: string): void {
@@ -99,15 +87,6 @@ export async function flushQueue(): Promise<void> {
   const remaining: QueuedRecord[] = [];
 
   for (const item of queue) {
-    if (item.attempts >= MAX_ATTEMPTS) {
-      console.error(
-        '[queue] ❌ Record permanently dropped after', MAX_ATTEMPTS, 'failed attempts:',
-        item.record.ref_id,
-        '— This record was not saved to the database. Check connectivity and Supabase status.'
-      );
-      continue;
-    }
-
     try {
       const { error } = await supabase
         .from('records')

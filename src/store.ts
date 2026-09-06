@@ -1,7 +1,8 @@
 
 
 import { create } from 'zustand';
-import { hashPassword, verifyPassword, isBcryptHash } from './lib/crypto';
+import { hashPassword, verifyPassword } from './lib/crypto';
+import { supabase } from './lib/supabase';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { StateStorage } from 'zustand/middleware';
 import { safeSetItem, safeGetItem, safeRemoveItem } from './lib/safeStorage';
@@ -503,22 +504,7 @@ const defaultTemplates: ChecklistTemplate[] = [
   { id: uid(), equipmentTypeId: EQ_FL, sectionId: SEC_MECH, items: makeItems(['Engine / Motor Oil Level','Hydraulic Oil Level','Coolant Level','Fuel / LPG Level','Forks & Mast','Tyres & Wheels','Brakes','Load Backrest']) },
 ];
 
-const SUPER_ADMIN_INITIAL_HASH =
-  '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi'; 
-
-const defaultAdmins: AdminUser[] = [
-  {
-    id: 'admin-super',
-    email: 'admin@system.com',
-    passwordHash: SUPER_ADMIN_INITIAL_HASH,
-    passwordSet: true,
-    isSuperAdmin: true,
-    role: 'junior',
-    canDeleteRecords: true,
-    canAddAdmins: true,
-    createdAt: now(),
-  },
-];
+const defaultAdmins: AdminUser[] = [];
 
 const defaultSettings: AppSettings = {
   navLogoUrl: null,
@@ -1528,60 +1514,27 @@ export const useStore = create<AppState>()(
       },
 
       login: async (email, password) => {
-        const candidates = get().adminUsers.filter(
-          (u) => u.email.toLowerCase() === email.toLowerCase() && u.passwordSet === true
-        );
-        for (const user of candidates) {
-          const match = await verifyPassword(password, user.passwordHash);
-          if (match) {
-            
-            if (!isBcryptHash(user.passwordHash)) {
-              const newHash = await hashPassword(password);
-              const upgraded = { ...user, passwordHash: newHash };
-              set((s) => ({
-                adminUsers: s.adminUsers.map((u) => u.id === upgraded.id ? upgraded : u),
-                currentAdmin: upgraded,
-              }));
-              syncUpsertAdmin(upgraded);
-              
-              if (upgraded.isSuperAdmin) {
-                const _actor = upgraded.email;
-                const _addLog = get().addLog;
-                (async () => {
-                  let ip = 'Unknown';
-                  try {
-                    const res = await Promise.race([
-                      fetch('https://api.ipify.org?format=json').then((r) => r.json()),
-                      new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 4000)),
-                    ]);
-                    ip = (res as { ip?: string }).ip ?? 'Unknown';
-                  } catch { ip = 'Unavailable'; }
-                  _addLog({ section: 'admin', type: 'admin_login', description: 'Super Admin signed in', actor: _actor, ip });
-                })();
-              }
-              return upgraded;
-            }
-            set({ currentAdmin: user });
-            
-            if (user.isSuperAdmin) {
-              const _actor = user.email;
-              const _addLog = get().addLog;
-              (async () => {
-                let ip = 'Unknown';
-                try {
-                  const res = await Promise.race([
-                    fetch('https://api.ipify.org?format=json').then((r) => r.json()),
-                    new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 4000)),
-                  ]);
-                  ip = (res as { ip?: string }).ip ?? 'Unknown';
-                } catch { ip = 'Unavailable'; }
-                _addLog({ section: 'admin', type: 'admin_login', description: 'Super Admin signed in', actor: _actor, ip });
-              })();
-            }
-            return user;
-          }
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error || !data.user) return null;
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('id, email, role, active, created_at')
+          .eq('id', data.user.id)
+          .single();
+        if (profileError || !profile?.active || !['junior', 'senior', 'super_admin'].includes(profile.role)) {
+          await supabase.auth.signOut();
+          return null;
         }
-        return null;
+        const user: AdminUser = {
+          id: profile.id, email: profile.email, passwordHash: '', passwordSet: true,
+          isSuperAdmin: profile.role === 'super_admin',
+          role: profile.role === 'senior' ? 'senior' : 'junior',
+          canDeleteRecords: profile.role === 'senior' || profile.role === 'super_admin',
+          canAddAdmins: profile.role === 'senior' || profile.role === 'super_admin',
+          createdAt: profile.created_at,
+        };
+        set({ currentAdmin: user });
+        return user;
       },
 
       setAdminPassword: async (email, newPassword) => {
@@ -1602,7 +1555,7 @@ export const useStore = create<AppState>()(
         return true;
       },
 
-      logout: () => set({ currentAdmin: null }),
+      logout: () => { void supabase.auth.signOut(); set({ currentAdmin: null }); },
 
       registerAdmin: (email, role) => {
         const exists = get().adminUsers.some(

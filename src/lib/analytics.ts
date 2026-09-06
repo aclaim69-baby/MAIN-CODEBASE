@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { businessDate } from './businessDate';
 
 export type AnalyticsPeriod = 'today' | 'yesterday' | '7d' | '30d' | '90d' | 'thisMonth' | 'lastMonth' | 'custom';
 export interface AnalyticsFilters { period: AnalyticsPeriod; start?: string; end?: string; equipmentType: string; equipment: string; result: 'all' | 'OK' | 'NOT OK'; }
@@ -12,7 +13,7 @@ export interface EquipmentFaultMetric {
   faultRate: number;
 }
 
-const localDate = (d: Date) => d.toISOString().slice(0, 10);
+const localDate = (d: Date) => businessDate(d);
 export function bounds(filters: AnalyticsFilters) {
   const now = new Date(); const end = localDate(now); const start = new Date(now);
   if (filters.period === 'today') return { start: end, end };

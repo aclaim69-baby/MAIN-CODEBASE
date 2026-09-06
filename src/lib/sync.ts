@@ -50,18 +50,6 @@ export interface LogRow {
   created_at?: string;
 }
 
-export interface AdminRow {
-  id:                 string;
-  email:              string;
-  password_hash:      string;
-  password_set:       boolean;
-  is_super_admin:     boolean;
-  role:               string;
-  can_delete_records: boolean;
-  can_add_admins:     boolean;
-  created_at:         string;
-}
-
 export interface DepartmentRow {
   id:          string;
   name:        string;
@@ -200,20 +188,6 @@ export function recordToRow(r: Record): RecordRow {
   };
 }
 
-function adminToRow(a: AdminUser): AdminRow {
-  return {
-    id:                 a.id,
-    email:              a.email,
-    password_hash:      a.passwordHash,
-    password_set:       a.passwordSet,
-    is_super_admin:     a.isSuperAdmin,
-    role:               a.role,
-    can_delete_records: a.canDeleteRecords,
-    can_add_admins:     a.canAddAdmins,
-    created_at:         a.createdAt,
-  };
-}
-
 export function rowToRecord(row: RecordRow): Record {
   let checklist: Record['checklistResponses'] = [];
   const raw = row.checklist;
@@ -348,30 +322,6 @@ function rowToMapping(row: MappingRow): EquipmentTypeMapping {
     departmentId:    row.department_id,
     sectionId:       row.section_id,
     equipmentTypeId: row.equipment_type_id,
-  };
-}
-
-function rowToAdmin(row: AdminRow): AdminUser {
-  
-  
-  
-  
-  const anyRow = row as any;
-  const passwordHash: string =
-    row.password_hash ??
-    anyRow.password ??
-    '';
-
-  return {
-    id:               row.id,
-    email:            row.email,
-    passwordHash,
-    passwordSet:      row.password_set,
-    isSuperAdmin:     row.is_super_admin,
-    role:             (row.role ?? 'junior') as 'junior' | 'senior',
-    canDeleteRecords: row.can_delete_records ?? true,
-    canAddAdmins:     row.can_add_admins ?? false,
-    createdAt:        row.created_at,
   };
 }
 
@@ -656,7 +606,7 @@ export async function fetchLogsSince(since: string): Promise<ActivityLog[] | nul
 
 export async function syncUpsertAdmin(admin: AdminUser): Promise<void> {
   try {
-    const { error } = await supabase.from('admins').upsert(adminToRow(admin), { onConflict: 'id' });
+    const { error } = await supabase.functions.invoke('admin-management', { body: { action: 'upsert', admin } });
     if (error) { console.error('[sync] upsertAdmin error:', error.message); }
     else { console.debug('[sync] ✅ admin synced:', admin.email); _broadcastRefresh('all'); }
   } catch (err) { console.error('[sync] upsertAdmin exception:', err); }
@@ -664,7 +614,7 @@ export async function syncUpsertAdmin(admin: AdminUser): Promise<void> {
 
 export async function syncDeleteAdmin(id: string): Promise<void> {
   try {
-    const { error } = await supabase.from('admins').delete().eq('id', id);
+    const { error } = await supabase.functions.invoke('admin-management', { body: { action: 'deactivate', id } });
     if (error) { console.error('[sync] deleteAdmin error:', error.message); }
     else { console.debug('[sync] ✅ admin deleted:', id); _broadcastRefresh('all'); }
   } catch (err) { console.error('[sync] deleteAdmin exception:', err); }
@@ -677,25 +627,18 @@ export async function fetchRemoteAdmins(): Promise<AdminUser[] | null> {
     
     
     
-    let { data, error }: { data: any[] | null; error: import('@supabase/supabase-js').PostgrestError | null } = await supabase
-      .from('admins')
-      .select('id, email, password_hash, password_set, is_super_admin, role, can_delete_records, can_add_admins, created_at')
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, email, role, active, created_at')
       .order('created_at', { ascending: true });
-
-    if (error && (error.message?.includes('password_hash') || error.code === '42703')) {
-      
-      console.warn('[sync] password_hash column missing — falling back to legacy password column. Run SECURITY_PASSWORD_HASHING.sql to migrate.');
-      const fallback = await supabase
-        .from('admins')
-        .select('id, email, password, password_set, is_super_admin, role, can_delete_records, can_add_admins, created_at')
-        .order('created_at', { ascending: true });
-      data = fallback.data;
-      error = fallback.error;
-    }
-
     if (error) { console.error('[sync] fetchAdmins error:', error.message); return null; }
     _trackPayload('admins:list', data);
-    return (data ?? []).map((row: AdminRow) => rowToAdmin(row));
+    return (data ?? []).map((row) => ({
+      id: row.id, email: row.email, passwordHash: '', passwordSet: true,
+      isSuperAdmin: row.role === 'super_admin', role: row.role === 'senior' ? 'senior' : 'junior',
+      canDeleteRecords: row.role === 'senior' || row.role === 'super_admin',
+      canAddAdmins: row.role === 'senior' || row.role === 'super_admin', createdAt: row.created_at,
+    }));
   } catch (err) { console.error('[sync] fetchAdmins exception:', err); return null; }
 }
 

@@ -29,13 +29,7 @@ export async function verifyPassword(
   plaintext: string,
   hash: string
 ): Promise<boolean> {
-  // Guard: if the stored value is not a bcrypt hash (legacy plaintext during
-  // migration), do a plain comparison as a one-time fallback so existing
-  // admins aren't locked out. On next successful login the hash will be
-  // upgraded automatically by the store.
-  if (!hash.startsWith('$2a$') && !hash.startsWith('$2b$')) {
-    return plaintext === hash; // legacy plaintext fallback
-  }
+  if (!isBcryptHash(hash)) return false;
   return bcrypt.compare(plaintext, hash);
 }
 

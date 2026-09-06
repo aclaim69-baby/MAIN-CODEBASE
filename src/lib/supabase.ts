@@ -1,27 +1,19 @@
 import { createClient } from '@supabase/supabase-js';
 
-const DEFAULT_SUPABASE_URL = 'https://osfmblhsjzqnwagbwctz.supabase.co';
-const DEFAULT_SUPABASE_ANON_KEY = 'sb_publishable_MFIMSQtrqoCVaoC07gM3zA_SAMEXQqD';
-
 const envSupabaseUrl = import.meta.env.VITE_SUPABASE_URL?.toString().trim();
 const envSupabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.toString().trim();
 
-const SUPABASE_URL = envSupabaseUrl || DEFAULT_SUPABASE_URL;
-const SUPABASE_ANON_KEY = envSupabaseKey || DEFAULT_SUPABASE_ANON_KEY;
-
 if (!envSupabaseUrl || !envSupabaseKey) {
-  console.warn(
-    '[supabase] ⚠️  Using hardcoded fallback credentials. Set VITE_SUPABASE_URL and ' +
-    'VITE_SUPABASE_ANON_KEY in your .env file (or Vercel Environment Variables) to connect ' +
-    'to the correct project. See .env.example for the required variables.'
-  );
+  throw new Error('Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY. Configure Supabase explicitly.');
 }
+const SUPABASE_URL = envSupabaseUrl;
+const SUPABASE_ANON_KEY = envSupabaseKey;
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
-    persistSession:     false,
-    autoRefreshToken:   false,
-    detectSessionInUrl: false,
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
   },
   realtime: {
     params: {
@@ -39,7 +31,6 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     headers: {
       'x-app-name':    'daily-checking',
       'apikey':        SUPABASE_ANON_KEY,
-      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
     },
   },
   db: { schema: 'public' },
