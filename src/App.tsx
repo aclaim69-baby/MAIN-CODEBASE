@@ -85,7 +85,6 @@ export default function App() {
   const [analyticsRestoreContext, setAnalyticsRestoreContext] = useState<AnalyticsRestoreContext | null>(null);
   const settings            = useStore((s) => s.settings);
   const isRealtimeConnected = useStore((s) => s.isRealtimeConnected);
-  const lastSyncedAt        = useStore((s) => s.lastSyncedAt);
   const currentAdmin        = useStore((s) => s.currentAdmin);
   
   const canSeeRecords       = canViewRecords(currentAdmin, settings.recordsVisibility);
@@ -817,7 +816,6 @@ export default function App() {
         currentPage={page}
         onNavigate={(p) => navigate(p as Page)}
         isRealtimeConnected={isRealtimeConnected}
-        lastSyncedAt={lastSyncedAt}
       />
 
       <LastUpdatedBar />
