@@ -7,10 +7,9 @@ interface Props {
   currentPage: string;
   onNavigate: (page: Page) => void;
   isRealtimeConnected?: boolean;
-  lastSyncedAt?: string | null;
 }
 
-export default function Header({ currentPage, onNavigate, isRealtimeConnected, lastSyncedAt }: Props) {
+export default function Header({ currentPage, onNavigate, isRealtimeConnected }: Props) {
   const currentAdmin = useStore((s) => s.currentAdmin);
   const settings = useStore((s) => s.settings);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -139,7 +138,6 @@ export default function Header({ currentPage, onNavigate, isRealtimeConnected, l
               {item.label}
             </NavBtn>
           ))}
-          <LiveDot connected={!!isRealtimeConnected} lastSyncedAt={lastSyncedAt ?? null} />
           {currentAdmin && (
             <AdminBadge role={currentAdmin.isSuperAdmin ? 'super' : currentAdmin.role} />
           )}
@@ -342,48 +340,5 @@ function NavBtn({
     >
       {children}
     </button>
-  );
-}
-
-function LiveDot({ connected }: { connected: boolean; lastSyncedAt: string | null }) {
-  const dotColor  = connected ? '#22C55E' : '#F59E0B';
-  const dotShadow = connected ? '0 0 0 2px rgba(34,197,94,0.25)' : '0 0 0 2px rgba(245,158,11,0.20)';
-  const label     = connected ? 'Live' : 'Sync…';
-  const bg        = connected ? '#F0FDF4' : '#FFFBEB';
-  const color     = connected ? '#166534' : '#92400E';
-
-  return (
-    <div
-      title={connected ? 'Real-time sync active' : 'Connecting to sync…'}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 5,
-        padding: '3px 10px',
-        background: bg,
-        borderRadius: 20,
-        fontSize: 11,
-        fontWeight: 500,
-        color,
-        transition: 'background 0.3s, color 0.3s',
-        marginLeft: 2,
-        cursor: 'default',
-        userSelect: 'none',
-        whiteSpace: 'nowrap',
-      }}
-    >
-      <div
-        style={{
-          width: 6,
-          height: 6,
-          borderRadius: '50%',
-          background: dotColor,
-          flexShrink: 0,
-          transition: 'background 0.3s',
-          boxShadow: dotShadow,
-        }}
-      />
-      <span>{label}</span>
-    </div>
   );
 }
