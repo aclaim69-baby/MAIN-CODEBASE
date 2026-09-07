@@ -54,11 +54,11 @@ function parseChecklist(value: unknown): ChecklistItem[] {
 
 function bucketForSection(section: string | null): ActionPlanTask['bucket'] | null {
   switch (text(section).toUpperCase()) {
-    case 'ROLLING STOCK':
+    case 'ROLLING STOCK CHECKLIST':
       return 'ROLLING STOCK Team';
-    case 'RTG':
+    case 'RTG CHECKLIST':
       return 'RTG Team';
-    case 'MHC':
+    case 'MHC CHECKLIST':
       return 'MHC Team';
     default:
       // Bromma and any non-operational/unknown sections are intentionally excluded.
