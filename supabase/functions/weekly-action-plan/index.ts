@@ -149,9 +149,12 @@ Deno.serve(async (request: Request) => {
         const check = text(item.check) || text(item.label);
         const comment = text(item.comment);
         const actionPlan = text(item.action_plan) || text(item.actionPlan);
+        const title = check
+          ? `${equipment}: ${check} — ${comment}`
+          : `${equipment}: ${comment}`;
         tasks.push({
           bucket,
-          title: `${equipment}: ${comment}`,
+          title,
           priority: 'Medium',
           start_date: recordDate,
           notes: `Check: ${check}\nAction plan: ${actionPlan}\nTechnician: ${text(record.technician)}\nRef: ${refId}`,
